@@ -1,0 +1,104 @@
+{
+  "tool": "procsift",
+  "version": "0.5.1",
+  "time": "2026-01-15T14:32:08Z",
+  "host_result": "fail",
+  "host_exit_reason": "PROC-DELETED-EXE pid 4242",
+  "host": {
+    "hostname": "example",
+    "kernel": "Linux version fixture",
+    "boot_id": "boot-abc",
+    "euid": 0,
+    "pid_max": 4194304,
+    "tasks_seen": 42
+  },
+  "counts": {"high": 1, "medium": 2, "low": 0, "info": 0},
+  "host_counts": {"high": 1, "medium": 2, "low": 0, "info": 0},
+  "scanner_counts": {"high": 1, "medium": 0, "low": 0, "info": 0},
+  "findings": [
+    {
+      "rule": "PROC-DELETED-EXE",
+      "severity": "high",
+      "pid": 4242,
+      "process": "worker",
+      "summary": "Executable deleted and running",
+      "detail": "The main executable path is deleted.",
+      "evidence": ["exe path missing on disk"],
+      "origin": "host"
+    },
+    {
+      "rule": "PROC-UNOWNED-LIB",
+      "severity": "medium",
+      "pid": 1830,
+      "process": "service",
+      "summary": "Unlisted mapped library",
+      "origin": "host"
+    },
+    {
+      "rule": "FILE-PKG-MISMATCH",
+      "severity": "medium",
+      "subject": "/usr/bin/example",
+      "summary": "differs from manifest",
+      "origin": "host"
+    },
+    {
+      "rule": "PROC-MEMFD-EXE",
+      "severity": "high",
+      "pid": 9999,
+      "process": "procsift",
+      "summary": "Scanner memfd mapping",
+      "origin": "scanner_self"
+    }
+  ],
+  "attention": [
+    {"pid": 4242, "score": 95, "level": "high", "why": ["deleted exe"]},
+    {"pid": 1830, "score": 70, "level": "medium", "why": ["unowned lib"]},
+    {"subject": "/usr/bin/example", "score": 60, "level": "medium", "why": ["pkg mismatch"]}
+  ],
+  "processes": [
+    {
+      "pid": 4242,
+      "ppid": 1,
+      "uid": 0,
+      "name": "worker",
+      "state": "S",
+      "rss_kib": 4096,
+      "threads": 1,
+      "exe": "/tmp/deleted",
+      "cmdline": "worker --daemon",
+      "start_ticks": 12345,
+      "exe_dev": "fe:01",
+      "exe_inode": 555,
+      "exe_hash": "abc123",
+      "exe_hash_scope": "partial",
+      "listed": true
+    },
+    {
+      "pid": 1830,
+      "ppid": 1,
+      "uid": 1000,
+      "name": "service",
+      "state": "R",
+      "rss_kib": 8192,
+      "threads": 2,
+      "exe": "/usr/bin/service",
+      "cmdline": "service -f",
+      "listed": true
+    }
+  ],
+  "sockets": [
+    {
+      "proto": "tcp",
+      "local": "0.0.0.0:4444",
+      "remote": "*:*",
+      "state": "LISTEN",
+      "inode": 123,
+      "pid": 4242
+    }
+  ],
+  "coverage": [
+    {"source": "/proc/9999/maps", "state": "denied", "detail": "permission denied"}
+  ],
+  "notes": ["fixture note"],
+  "limits": ["fixture limit"]
+}

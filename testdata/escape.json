@@ -1,0 +1,19 @@
+{
+  "tool": "procsift",
+  "version": "0.5.1",
+  "time": "2026-01-15T14:32:08Z",
+  "host": {"hostname": "test"},
+  "findings": [
+    {
+      "rule": "PROC-ESCAPE",
+      "severity": "high",
+      "pid": 1,
+      "process": "\u001b[31mevil\u001b[0m",
+      "summary": "contains\u0007controls",
+      "detail": "line1\nline2"
+    }
+  ],
+  "notes": [],
+  "limits": [],
+  "coverage": []
+}
