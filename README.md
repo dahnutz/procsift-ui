@@ -7,8 +7,8 @@ Terminal viewer for [ProcSift](https://github.com/dahnutz/procsift) JSON reports
 For a live scan on Linux x86-64, download both executables and run the UI:
 
 ```sh
-wget -O procsift https://raw.githubusercontent.com/dahnutz/procsift/main/bin/procsift
-wget -O procsift-ui https://raw.githubusercontent.com/dahnutz/procsift-ui/main/bin/procsift-ui
+wget -O procsift https://github.com/dahnutz/procsift/raw/refs/heads/main/bin/procsift
+wget -O procsift-ui https://github.com/dahnutz/procsift-ui/raw/refs/heads/main/bin/procsift-ui
 chmod +x procsift procsift-ui
 sudo ./procsift-ui --scanner ./procsift
 ```
