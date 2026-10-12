@@ -1,6 +1,7 @@
 package scanner_test
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +34,13 @@ func TestRunAcceptsExitCodeOne(t *testing.T) {
 	}
 	if len(res.Report.Findings) != 4 {
 		t.Fatalf("findings: %d", len(res.Report.Findings))
+	}
+	want, err := os.ReadFile(sample)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(res.RawJSON, want) {
+		t.Fatal("raw JSON was not preserved")
 	}
 }
 

@@ -40,7 +40,9 @@ Otherwise, point the UI at the scanner executable. From this directory, with the
 sudo ./bin/procsift-ui --scanner ../procsift/bin/procsift
 ```
 
-The UI runs `procsift -json -q` once and opens that snapshot. It accepts scanner exit `1`, which means a finding met ProcSift's threshold. It does not rescan when you open a finding or PID.
+The UI runs `procsift -json -q` and opens that snapshot. It accepts scanner exit `1`, which means a finding met ProcSift's threshold. Press `r` on the main screen to scan again. Opening a finding or PID does not start another scan.
+
+Press `s` on the main screen and enter a file name or path. Use `.txt` for a readable summary of the findings, processes, sockets, file checks, and coverage. Use `.json` for the complete scanner report; a name without an extension gets `.json` automatically. Press Enter on an empty prompt to use the suggested JSON name. The suggested name changes when that file already exists. Left and right arrows move through a typed name; Backspace and Delete edit it. The UI creates files with mode `0600` and will not overwrite an existing file. A failed refresh leaves the previous snapshot on screen.
 
 ## Open a saved report
 
@@ -59,12 +61,15 @@ Use `--folder /path/to/reports` to choose among `.json` files in one directory. 
 | Page Up/Page Down | Move a page |
 | Enter | Open a finding, process, or selected report |
 | `p` | Enter a PID recorded in this report |
+| `n` / `p` in a detail view | Open the next or previous finding or process in the current list |
 | `/` | Filter the current list |
+| `r` on the live main screen | Run a new scan |
+| `s` on the live main screen | Save the current scan as JSON or text |
 | Tab | Switch between Findings, Processes, Coverage, and Scanner self |
 | Esc | Return to the list or cancel a prompt |
 | `q` | Quit |
 
-Findings are ordered high to low. The detail view shows the evidence recorded in the report. PID details include its recorded process fields, sockets, and linked findings. Coverage lists incomplete reads and scan limits. The report time and source remain visible so an offline snapshot is not mistaken for live state.
+Findings are ordered high to low. In a detail view, `n` and `p` follow the current list order, including any filter. A PID opened with `p` on the main screen follows numeric PID order. The detail view shows the evidence recorded in the report. PID details include its recorded process fields, sockets, and linked findings. Coverage lists incomplete reads and scan limits. The report time and source remain visible so an offline snapshot is not mistaken for live state.
 
 The UI needs an interactive terminal. It reads released ProcSift JSON reports up to 64 MiB. Process details are limited to fields already present in a report; the UI does not read `/proc` or acquire more evidence. [REPORT_FORMAT.md](REPORT_FORMAT.md) lists the fields it uses, and [PROPOSAL.md](PROPOSAL.md) describes the design.
 

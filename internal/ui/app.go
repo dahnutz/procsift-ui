@@ -2,11 +2,16 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"github.com/dahnutz/procsift-ui/internal/exporter"
 	"github.com/dahnutz/procsift-ui/internal/offline"
 	"github.com/dahnutz/procsift-ui/internal/report"
+	"github.com/dahnutz/procsift-ui/internal/scanner"
 	"github.com/dahnutz/procsift-ui/internal/terminal"
 )
 
@@ -37,22 +42,29 @@ type App struct {
 	SourcePath string
 	ScanExit   int // -1 when offline
 
-	tab          ViewTab
-	screen       screen
-	cursor       int
-	scroll       int
-	filter       string
-	promptKind   string
-	promptInput  string
-	picker       []offline.Entry
-	pickerCursor int
-	pickerErr    string
-	detailScroll int
-	pageRows     int
-	listIndex    int
-	pid          int
-	statusMsg    string
-	quit         bool
+	tab             ViewTab
+	screen          screen
+	cursor          int
+	scroll          int
+	filter          string
+	promptKind      string
+	promptInput     string
+	promptCursor    int
+	picker          []offline.Entry
+	pickerCursor    int
+	pickerErr       string
+	detailScroll    int
+	pageRows        int
+	listIndex       int
+	pid             int
+	statusMsg       string
+	quit            bool
+	liveJSON        []byte
+	liveRun         func() (scanner.Result, error)
+	saveDefaultPath string
+	detailItems     []int
+	detailPos       int
+	detailFromList  bool
 }
 
 // NewApp creates an app ready to run.
@@ -65,6 +77,12 @@ func NewApp(t *terminal.Term, idx *report.IndexedReport, sourcePath string, scan
 		tab:        TabFindings,
 		screen:     screenBrowse,
 	}
+}
+
+// EnableLive supplies the current scanner output and a way to take another scan.
+func (a *App) EnableLive(rawJSON []byte, run func() (scanner.Result, error)) {
+	a.liveJSON = rawJSON
+	a.liveRun = run
 }
 
 // Run starts the main event loop.
@@ -120,18 +138,48 @@ func (a *App) handleBrowseKey(ev terminal.KeyEvent) {
 	case terminal.KeyPID:
 		a.promptKind = "pid"
 		a.promptInput = ""
+		a.promptCursor = 0
 		a.screen = screenPrompt
 	case terminal.KeyFilter:
 		a.promptKind = "filter"
 		a.promptInput = a.filter
+		a.promptCursor = len(a.promptInput)
 		a.screen = screenPrompt
 	case terminal.KeyRune:
-		if ev.Rune == '\t' {
+		switch ev.Rune {
+		case 'r':
+			if a.liveRun != nil {
+				a.refresh()
+			}
+		case 's':
+			if a.liveRun != nil {
+				a.promptKind = "save"
+				a.promptInput = ""
+				a.promptCursor = 0
+				a.saveDefaultPath = suggestedSavePath(".", time.Now())
+				a.screen = screenPrompt
+			}
+		case '\t':
 			a.tab = ViewTab((int(a.tab) + 1) % 4)
 			a.cursor = 0
 			a.scroll = 0
 		}
 	}
+}
+
+func (a *App) refresh() {
+	a.statusMsg = "Refreshing scan..."
+	a.draw()
+	res, err := a.liveRun()
+	if err != nil {
+		a.statusMsg = fmt.Sprintf("Refresh failed: %v", err)
+		return
+	}
+	a.Idx = report.Index(res.Report)
+	a.liveJSON = res.RawJSON
+	a.ScanExit = res.ExitCode
+	a.cursor, a.scroll = 0, 0
+	a.statusMsg = "Scan refreshed"
 }
 
 func (a *App) handleDetailKey(ev terminal.KeyEvent) {
@@ -154,6 +202,29 @@ func (a *App) handleDetailKey(ev terminal.KeyEvent) {
 		}
 	case terminal.KeyPageDown:
 		a.detailScroll += a.pageStep()
+	case terminal.KeyPID:
+		a.moveDetail(-1)
+	case terminal.KeyRune:
+		if ev.Rune == 'n' {
+			a.moveDetail(1)
+		}
+	}
+}
+
+func (a *App) moveDetail(delta int) {
+	pos := a.detailPos + delta
+	if pos < 0 || pos >= len(a.detailItems) {
+		return
+	}
+	a.detailPos = pos
+	a.detailScroll = 0
+	if a.screen == screenFinding {
+		a.listIndex = a.detailItems[pos]
+	} else if a.screen == screenPID {
+		a.pid = a.detailItems[pos]
+	}
+	if a.detailFromList {
+		a.cursor = pos
 	}
 }
 
@@ -194,22 +265,40 @@ func (a *App) movePicker(delta int) {
 }
 
 func (a *App) handlePromptKey(ev terminal.KeyEvent) {
+	if a.promptCursor > len(a.promptInput) {
+		a.promptCursor = len(a.promptInput)
+	}
 	switch ev.Key {
 	case terminal.KeyEsc:
 		a.screen = screenBrowse
 	case terminal.KeyEnter:
 		a.submitPrompt()
 	case terminal.KeyBackspace:
-		if a.promptInput != "" {
-			_, size := utf8.DecodeLastRuneInString(a.promptInput)
-			if size > 0 {
-				a.promptInput = a.promptInput[:len(a.promptInput)-size]
-			}
+		if a.promptCursor > 0 {
+			_, size := utf8.DecodeLastRuneInString(a.promptInput[:a.promptCursor])
+			a.promptInput = a.promptInput[:a.promptCursor-size] + a.promptInput[a.promptCursor:]
+			a.promptCursor -= size
+		}
+	case terminal.KeyDelete:
+		if a.promptCursor < len(a.promptInput) {
+			_, size := utf8.DecodeRuneInString(a.promptInput[a.promptCursor:])
+			a.promptInput = a.promptInput[:a.promptCursor] + a.promptInput[a.promptCursor+size:]
+		}
+	case terminal.KeyLeft:
+		if a.promptCursor > 0 {
+			_, size := utf8.DecodeLastRuneInString(a.promptInput[:a.promptCursor])
+			a.promptCursor -= size
+		}
+	case terminal.KeyRight:
+		if a.promptCursor < len(a.promptInput) {
+			_, size := utf8.DecodeRuneInString(a.promptInput[a.promptCursor:])
+			a.promptCursor += size
 		}
 	default:
-		// j/k/q/p// are navigation keys in the lists. Inside a prompt they are text.
+		// Navigation keys are text inside a prompt.
 		if ev.Rune >= 32 && ev.Rune != 127 {
-			a.promptInput += string(ev.Rune)
+			a.promptInput = a.promptInput[:a.promptCursor] + string(ev.Rune) + a.promptInput[a.promptCursor:]
+			a.promptCursor += utf8.RuneLen(ev.Rune)
 			return
 		}
 		if ev.Key == terminal.KeyQuit {
@@ -238,9 +327,54 @@ func (a *App) submitPrompt() {
 			return
 		}
 		a.pid = pid
+		a.detailItems = a.detailItems[:0]
+		a.detailPos = 0
+		a.detailFromList = false
+		for i, p := range a.Idx.SortedProcesses {
+			a.detailItems = append(a.detailItems, p.PID)
+			if p.PID == pid {
+				a.detailPos = i
+			}
+		}
 		a.detailScroll = 0
 		a.screen = screenPID
 		a.statusMsg = ""
+	case "save":
+		path := strings.TrimSpace(a.promptInput)
+		if path == "" {
+			path = a.saveDefaultPath
+		}
+		format := "json"
+		switch strings.ToLower(filepath.Ext(path)) {
+		case "":
+			path += ".json"
+		case ".json":
+		case ".txt":
+			format = "txt"
+		default:
+			a.statusMsg = "Use .json or .txt, or leave off the extension"
+			return
+		}
+		if err := exporter.Save(path, format, a.liveJSON, a.Idx.Report); err != nil {
+			a.statusMsg = fmt.Sprintf("Save failed: %v", err)
+			return
+		}
+		a.statusMsg = "Saved " + filepath.Clean(path)
+		a.screen = screenBrowse
+	}
+}
+
+func suggestedSavePath(dir string, now time.Time) string {
+	base := "procsift-" + now.Local().Format("20060102-150405")
+	for n := 1; ; n++ {
+		name := base
+		if n > 1 {
+			name = fmt.Sprintf("%s-%d", base, n)
+		}
+		path := filepath.Join(dir, name+".json")
+		if _, err := os.Lstat(path); err != nil {
+			return path
+		}
 	}
 }
 
@@ -255,6 +389,12 @@ func (a *App) openSelection() {
 			return
 		}
 		a.listIndex = a.globalFindingIndex(list[a.cursor])
+		a.detailItems = a.detailItems[:0]
+		for _, f := range list {
+			a.detailItems = append(a.detailItems, a.globalFindingIndex(f))
+		}
+		a.detailPos = a.cursor
+		a.detailFromList = true
 		a.detailScroll = 0
 		a.screen = screenFinding
 	case TabProcesses:
@@ -263,6 +403,12 @@ func (a *App) openSelection() {
 			return
 		}
 		a.pid = list[a.cursor].PID
+		a.detailItems = a.detailItems[:0]
+		for _, p := range list {
+			a.detailItems = append(a.detailItems, p.PID)
+		}
+		a.detailPos = a.cursor
+		a.detailFromList = true
 		a.detailScroll = 0
 		a.screen = screenPID
 	}

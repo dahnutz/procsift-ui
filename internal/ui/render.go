@@ -568,10 +568,15 @@ func footerLine(width int, status, hint string) string {
 	return "\x1b[33m" + clip(status, width) + "\x1b[0m"
 }
 
-func browseHint(width int) string {
+func browseHint(width int, live bool) string {
 	full := "↑/↓ PgUp/PgDn   Enter open   p PID   / filter   Tab view   q quit"
 	mid := "j/k PgUp/PgDn  Enter  p  /  Tab  q"
 	short := "j/k  Enter  p  /  Tab  q"
+	if live {
+		full = "↑/↓ PgUp/PgDn   Enter open   p PID   / filter   Tab view   r refresh   s save   q quit"
+		mid = "j/k PgUp/PgDn  Enter  p  /  Tab  r refresh  s save  q"
+		short = "j/k  Enter  p  /  Tab  r  s  q"
+	}
 	if colWidth(full) <= width {
 		return full
 	}
@@ -651,6 +656,9 @@ func (a *App) renderRows(width, height int) []string {
 	default:
 		rows := a.renderBrowse(width, height)
 		if a.screen == screenPrompt && height > 0 {
+			if a.statusMsg != "" && height > 1 {
+				rows[height-2] = "\x1b[33m" + clip(a.statusMsg, width) + "\x1b[0m"
+			}
 			rows[height-1] = a.promptLine(width)
 		}
 		return rows
@@ -716,7 +724,7 @@ func (a *App) renderBrowse(width, height int) []string {
 	default:
 		a.paintCoverage(c, row, body)
 	}
-	c.put(footerAt, footerLine(width, a.statusMsg, browseHint(width)))
+	c.put(footerAt, footerLine(width, a.statusMsg, browseHint(width, a.liveRun != nil)))
 	return c.rows
 }
 
@@ -796,11 +804,32 @@ func (a *App) paintCoverage(c *canvas, start, n int) {
 
 func (a *App) promptLine(width int) string {
 	label := "Filter "
-	if a.promptKind == "pid" {
+	switch a.promptKind {
+	case "pid":
 		label = "PID "
+	case "save":
+		label = "Save as "
 	}
-	text := label + oneLine(a.promptInput) + "_"
+	cursor := a.promptCursor
+	if cursor > len(a.promptInput) {
+		cursor = len(a.promptInput)
+	}
+	before := oneLine(a.promptInput[:cursor])
+	after := oneLine(a.promptInput[cursor:])
+	leading := ""
+	for before != "" && colWidth(label+leading+before+"_") > width {
+		_, size := utf8.DecodeRuneInString(before)
+		before = before[size:]
+		leading = "…"
+	}
+	text := label + leading + before + "_" + after
 	hint := "Enter confirm   Esc cancel"
+	if a.promptKind == "save" {
+		hint = "Enter: " + filepath.Base(a.saveDefaultPath) + "   .txt for text"
+		if a.promptInput != "" {
+			hint = "Enter save   Esc cancel"
+		}
+	}
 	if colWidth(text)+2+colWidth(hint) <= width {
 		text += "  " + hint
 	}
@@ -870,13 +899,13 @@ func (a *App) renderDetail(title string, lines []string, width, height int) []st
 		}
 		c.put(1+i, lines[idx])
 	}
-	hint := "Esc back   j/k PgUp/PgDn   q quit"
+	hint := "Esc back   p previous   n next   j/k PgUp/PgDn   q quit"
 	if bodyN > 0 && len(lines) > bodyN {
 		last := a.detailScroll + bodyN
 		if last > len(lines) {
 			last = len(lines)
 		}
-		hint = fmt.Sprintf("%d-%d / %d   PgUp/PgDn   Esc   q", a.detailScroll+1, last, len(lines))
+		hint = fmt.Sprintf("%d-%d / %d   p/n   PgUp/PgDn   Esc   q", a.detailScroll+1, last, len(lines))
 	}
 	c.put(height-1, clip(hint, width))
 	return c.rows

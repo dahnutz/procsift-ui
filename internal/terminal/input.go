@@ -18,6 +18,9 @@ const (
 	KeyNone Key = iota
 	KeyUp
 	KeyDown
+	KeyLeft
+	KeyRight
+	KeyDelete
 	KeyPageUp
 	KeyPageDown
 	KeyEnter
@@ -66,13 +69,20 @@ func ReadKey(r io.Reader) (KeyEvent, error) {
 			return KeyEvent{Key: KeyUp}, nil
 		case 'B':
 			return KeyEvent{Key: KeyDown}, nil
-		case '5', '6':
+		case 'C':
+			return KeyEvent{Key: KeyRight}, nil
+		case 'D':
+			return KeyEvent{Key: KeyLeft}, nil
+		case '3', '5', '6':
 			if prefix == '[' {
 				end, ok, err := readByte(r, true)
 				if err != nil {
 					return KeyEvent{}, err
 				}
 				if ok && end == '~' {
+					if code == '3' {
+						return KeyEvent{Key: KeyDelete}, nil
+					}
 					if code == '5' {
 						return KeyEvent{Key: KeyPageUp}, nil
 					}

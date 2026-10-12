@@ -41,6 +41,7 @@ func (c *limitedCapture) Write(p []byte) (int, error) {
 // Result holds a parsed live scan and the scanner exit code.
 type Result struct {
 	Report   report.Report
+	RawJSON  []byte
 	ExitCode int
 	Stderr   string
 }
@@ -81,13 +82,13 @@ func Run(scannerPath string) (Result, error) {
 		if perr != nil {
 			return Result{}, fmt.Errorf("scanner exit %d but JSON invalid: %w; stderr: %s", exit, perr, stderr.String())
 		}
-		return Result{Report: rep, ExitCode: exit, Stderr: stderr.String()}, nil
+		return Result{Report: rep, RawJSON: bytes.Clone(stdout.Bytes()), ExitCode: exit, Stderr: stderr.String()}, nil
 	}
 	rep, err := report.ParseJSON(stdout.Bytes())
 	if err != nil {
 		return Result{}, fmt.Errorf("scanner stdout is not a valid report: %w", err)
 	}
-	return Result{Report: rep, ExitCode: 0, Stderr: stderr.String()}, nil
+	return Result{Report: rep, RawJSON: bytes.Clone(stdout.Bytes()), ExitCode: 0, Stderr: stderr.String()}, nil
 }
 
 func resolve(explicit string) (string, error) {

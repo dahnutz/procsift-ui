@@ -39,6 +39,7 @@ func run() int {
 	}
 
 	scanExit := -1
+	var liveResult scanner.Result
 	var idx *report.IndexedReport
 	var sourcePath string
 
@@ -87,6 +88,7 @@ func run() int {
 		}
 		idx = report.Index(res.Report)
 		scanExit = res.ExitCode
+		liveResult = res
 	}
 
 	term, err := terminal.Open()
@@ -96,12 +98,17 @@ func run() int {
 	}
 	defer term.Close()
 	app := ui.NewApp(term, idx, sourcePath, scanExit)
+	if scanExit >= 0 {
+		app.EnableLive(liveResult.RawJSON, func() (scanner.Result, error) {
+			return scanner.Run(scannerPath)
+		})
+	}
 	if err := app.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "procsift-ui: %v\n", err)
 		return 2
 	}
-	if scanExit >= 0 {
-		return scanExit
+	if app.ScanExit >= 0 {
+		return app.ScanExit
 	}
 	return 0
 }
